@@ -6,7 +6,6 @@ from twilio.twiml.messaging_response import MessagingResponse
 from app.database import SessionLocal, engine
 from app.models import Base, Category, MenuItem, ItemPrice, Customer, Order, OrderItem
 from app.state import active_conversations
-from app.services.ai_service import ask_juice_bar_ai
 from app.services.groq_service import ask_juice_bar_ai
 
 app = FastAPI()
