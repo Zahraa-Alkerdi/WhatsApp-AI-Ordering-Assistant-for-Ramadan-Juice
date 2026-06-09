@@ -5,11 +5,13 @@ from fastapi.responses import Response
 from twilio.twiml.messaging_response import MessagingResponse
 from app.database import SessionLocal, engine
 from app.models import Base, Category, MenuItem, ItemPrice, Customer, Order, OrderItem
-from app.state import active_conversations
 from app.services.groq_service import ask_juice_bar_ai
+from app.graph.order_graph import process_order_message, get_order_state
 
 app = FastAPI()
 Base.metadata.create_all(bind=engine)
+
+active_order_threads = set()
 
 @app.get("/")
 def home():
@@ -61,35 +63,31 @@ async def whatsapp_webhook(
     normalized_message = user_message.lower()
 
     response = MessagingResponse()
-            
-    if normalized_message in ["cancel", "إلغاء"]:
-        if From in active_conversations:
-            del active_conversations[From]
 
-            response.message(
-                "Order cancelled ❌\n\n"
-                "تم إلغاء الطلب ❌"
-            )
-        else:
-            response.message(
-                "No active order.\n"
-                "لا يوجد أي طلب."
-            )
+    if normalized_message in ["cancel", "إلغاء"]:
+        active_order_threads.discard(From)
+
+        response.message(
+            "Order cancelled ❌\n\n"
+            "تم إلغاء الطلب ❌"
+        )
 
         return Response(
             content=str(response),
             media_type="application/xml"
         )
 
-    if normalized_message in ["cart", "الفاتورة"]:
-        if From not in active_conversations:
+    elif normalized_message in ["cart", "الفاتورة"]:
+        order_state = get_order_state(From)
+
+        if not order_state:
             response.message(
                 "Your cart is empty.\n"
                 "الفاتورة فارغة."
             )
             return Response(content=str(response), media_type="application/xml")
 
-        cart = active_conversations[From]["cart"]
+        cart = order_state.get("cart", [])
 
         if not cart:
             response.message(
@@ -124,22 +122,31 @@ async def whatsapp_webhook(
 
         return Response(content=str(response), media_type="application/xml")
     
-    if normalized_message in ["confirm", "تأكيد"]:
-        if From not in active_conversations:
+    elif normalized_message in ["confirm", "تأكيد"]:
+
+        order_state = get_order_state(From)
+
+        if not order_state:
             response.message(
                 "No active order.\n"
-                "لا يوجد أي طلب ."
+                "لا يوجد أي طلب."
             )
-            return Response(content=str(response), media_type="application/xml")
+            return Response(
+                content=str(response),
+                media_type="application/xml"
+            )
 
-        cart = active_conversations[From]["cart"]
+        cart = order_state.get("cart", [])
 
         if not cart:
             response.message(
                 "Your cart is empty.\n"
                 "الفاتورة فارغة."
             )
-            return Response(content=str(response), media_type="application/xml")
+            return Response(
+                content=str(response),
+                media_type="application/xml"
+            )
 
         db = SessionLocal()
 
@@ -189,7 +196,7 @@ async def whatsapp_webhook(
 
             db.commit()
 
-            del active_conversations[From]
+            active_order_threads.discard(From)
 
             response.message(
                 f"Order confirmed ✅\n\n"
@@ -209,7 +216,7 @@ async def whatsapp_webhook(
             media_type="application/xml"
         )
 
-    if From in active_conversations:
+ 
         conversation = active_conversations[From]
 
         if conversation["state"] == "choosing_item":
@@ -359,8 +366,8 @@ async def whatsapp_webhook(
                     db.close()
 
             return Response(content=str(response), media_type="application/xml")
-    
-    if normalized_message in ["menu", "مينو", "المنيو", "القائمة"]:
+        
+    elif normalized_message in ["menu", "مينو", "المنيو", "القائمة"]:
         db = SessionLocal()
         try:
             menu_text = "Ramadan Juice Menu 🧃\n\n"
@@ -377,29 +384,24 @@ async def whatsapp_webhook(
             db.close()
 
     elif normalized_message in ["order", "طلب"]:
-        if From in active_conversations:
-            response.message(
-                "You already have an active order 🛒\n\n"
-                "Send the item name to continue, or send CANCEL to cancel.\n"
-                "لديك طلب قيد التحضير.\n"
-                "أرسل اسم الصنف للمتابعة أو CANCEL للإلغاء."
-            )
-        else:
-            active_conversations[From] = {
-                "state": "choosing_item",
-                "current_item": None,
-                "current_size": None,
-                "cart": []
-            }
+        active_order_threads.add(From)
 
-            response.message(
-                "Order started 🛒\n\n"
-                "What would you like to order?\n"
-                "Send the item name.\n\n"
-                "بدأنا الطلب 🛒\n"
-                "ماذا تريد أن تطلب؟\n"
-                "أرسل اسم الصنف."
-            )
+        result = process_order_message(
+            From,
+            user_message
+        )
+
+        response.message(result["bot_reply"])
+
+    elif From in active_order_threads:
+
+        result = process_order_message(
+            From,
+            user_message
+        )
+
+        response.message(result["bot_reply"])
+
     else:
         db = SessionLocal()
         try:

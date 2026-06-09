@@ -44,3 +44,15 @@ dist/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# LangGraph cache (if any appears later)
+.langgraph/
+
+# Private data
+data/categories.json
+data/item_prices.json
+data/menu_item.json
+
+# Personal backup files
+app/old_main.py
+app/state.py

@@ -6,3 +6,6 @@ python-dotenv
 sqlalchemy
 openai
 groq
+langgraph
+langchain
+langgraph-checkpoint
