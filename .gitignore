@@ -51,4 +51,9 @@ dist/
 
 # Personal backup files
 app/old_main.py
+data/categories.json
+data/menu_items.json
+data/item_prices.json
+app/congif.py
+
 
