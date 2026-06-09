@@ -9,3 +9,4 @@ groq
 langgraph
 langchain
 langgraph-checkpoint
+psycopg2-binary
