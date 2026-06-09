@@ -17,13 +17,6 @@ active_order_threads = set()
 def home():
     return {"message": "WhatsApp AI Agent backend is running"}
 
-@app.get("/seed")
-def seed_database():
-    from app.seed import seed_all
-
-    seed_all()
-
-    return {"message": "Database seeded successfully"}
 
 @app.get("/orders")
 def get_orders():
