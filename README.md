@@ -66,7 +66,6 @@ The assistant allows customers to browse the menu, place orders through WhatsApp
 app/
 │
 ├── graph/
-│   ├── chat_router_graph.py
 │   └── order_graph.py
 │
 ├── services/
