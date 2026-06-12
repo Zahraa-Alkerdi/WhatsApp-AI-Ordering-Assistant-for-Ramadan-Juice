@@ -247,13 +247,9 @@ async def whatsapp_webhook(
         intent = classify_intent(user_message)
 
         if intent == "greeting":
-            response.message(
-                "👋 Hello! Welcome to Ramadan Juice.\n\n"
-                "I can help you browse the menu, recommend drinks, or place an order.\n"
-                "Send MENU to browse or ORDER to start ordering."
-            )
+            response.message(get_ai_reply(user_message))
 
-        elif intent == "menu":
+        elif intent == "menu_request":
             db = SessionLocal()
             try:
                 response.message(build_menu_text(db))
@@ -266,6 +262,9 @@ async def whatsapp_webhook(
             response.message(result["bot_reply"])
 
         elif intent == "recommendation":
+            response.message(get_ai_reply(user_message))
+        
+        elif intent == "availability_question":
             response.message(get_ai_reply(user_message))
 
         else:

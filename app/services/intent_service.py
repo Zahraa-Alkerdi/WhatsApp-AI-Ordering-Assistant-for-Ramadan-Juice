@@ -1,18 +1,69 @@
-from app.services.groq_service import ask_juice_bar_ai
+import json
+from app.services.groq_service import client
+
 
 def classify_intent(user_message: str) -> str:
-    message = user_message.lower().strip()
+    prompt = f"""
+You are classifying customer messages for a restaurant WhatsApp assistant.
 
-    if message in ["hi", "hello", "hey", "مرحبا", "اهلا", "أهلا"]:
-        return "greeting"
+Return ONLY valid JSON.
 
-    if any(word in message for word in ["menu", "منيو", "المنيو", "القائمة", "شو عندكن"]):
-        return "menu"
+Allowed intents:
+- greeting
+- menu_request
+- availability_question
+- recommendation
+- general_chat
 
-    if any(word in message for word in ["order", "طلب", "بدي اطلب", "i want to order"]):
-        return "order"
+Examples:
 
-    if any(word in message for word in ["recommend", "popular", "best", "بتنصح", "منعش", "بارد"]):
-        return "recommendation"
+Message: "hello"
+Output: {{"intent":"greeting"}}
 
-    return "ai"
+Message: "hi"
+Output: {{"intent":"greeting"}}
+
+Message: "what do you have?"
+Output: {{"intent":"menu_request"}}
+
+Message: "show me the menu"
+Output: {{"intent":"menu_request"}}
+
+Message: "is pistachio available?"
+Output: {{"intent":"availability_question"}}
+
+Message: "do you have avocado with ashta?"
+Output: {{"intent":"availability_question"}}
+
+Message: "is it found in the menu?"
+Output: {{"intent":"availability_question"}}
+
+Message: "what is popular?"
+Output: {{"intent":"recommendation"}}
+
+Message: "recommend something cold"
+Output: {{"intent":"recommendation"}}
+
+Message: "I want something refreshing"
+Output: {{"intent":"recommendation"}}
+
+Classify this message:
+
+"{user_message}"
+
+Return JSON only:
+"""
+
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0
+    )
+
+    try:
+        data = json.loads(response.choices[0].message.content)
+        return data.get("intent", "general_chat")
+    except Exception:
+        return "general_chat"
