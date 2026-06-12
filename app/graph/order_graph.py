@@ -3,6 +3,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
 from app.database import SessionLocal
 from app.models import MenuItem, ItemPrice
+from app.services.search_service import find_matching_items
 
 memory = InMemorySaver()
 
@@ -43,17 +44,51 @@ def start_order_node(state: OrderState):
     return state
 
 def choose_item_node(state: OrderState):
-    item = state["user_message"]
+    db = SessionLocal()
 
-    state["current_item"] = item
-    state["current_step"] = "choosing_size"
+    try:
+        matches = find_matching_items(
+            db,
+            state["user_message"]
+        )
 
-    state["bot_reply"] = (
-        f"You selected {item}. "
-        "What size would you like?"
-    )
+        if len(matches) == 0:
+            state["bot_reply"] = (
+                "Item not found.\n"
+                "Please send a valid item name."
+            )
 
-    return state
+            state["current_step"] = "choosing_item"
+
+            return state
+
+        elif len(matches) > 1:
+            reply = "I found multiple items:\n\n"
+
+            for item in matches[:5]:
+                reply += f"• {item.name_ar}\n"
+
+            reply += "\nPlease send the exact item name."
+
+            state["bot_reply"] = reply
+            state["current_step"] = "choosing_item"
+
+            return state
+
+        item = matches[0]
+
+        state["current_item"] = item.id
+        state["current_step"] = "choosing_size"
+
+        state["bot_reply"] = (
+            f"You selected {item.name_ar}. "
+            "What size would you like?"
+        )
+
+        return state
+
+    finally:
+        db.close()
 
 def choose_size_node(state: OrderState):
     size = state["user_message"]
@@ -85,10 +120,7 @@ def add_to_cart_node(state: OrderState):
     try:
         item = (
             db.query(MenuItem)
-            .filter(
-                (MenuItem.name_ar == state["current_item"]) |
-                (MenuItem.name_en.ilike(state["current_item"]))
-            )
+            .filter(MenuItem.id == state["current_item"])
             .first()
         )
 
@@ -101,8 +133,10 @@ def add_to_cart_node(state: OrderState):
             db.query(ItemPrice)
             .filter(
                 ItemPrice.item_id == item.id,
-                (ItemPrice.size_ar == state["current_size"]) |
-                (ItemPrice.size_en.ilike(state["current_size"]))
+                (
+                    (ItemPrice.size_ar == state["current_size"]) |
+                    (ItemPrice.size_en.ilike(state["current_size"]))
+                )
             )
             .first()
         )
@@ -240,3 +274,41 @@ def reset_order_state(phone_number: str):
             "bot_reply": ""
         }
     )
+
+
+
+if __name__ == "__main__":
+
+    state = {
+        "phone_number": "123",
+        "user_message": "order",
+        "current_step": "",
+        "current_item": None,
+        "current_size": None,
+        "current_quantity": None,
+        "cart": [],
+        "bot_reply": ""
+    }
+
+    config = {
+    "configurable": {
+        "thread_id": "test-user"
+    }
+}
+
+    state = order_graph.invoke(state, config=config)
+    print(state["bot_reply"])
+
+    state["user_message"] = "حليب وموز"
+    state = order_graph.invoke(state, config=config)
+    print(state["bot_reply"])
+
+    state["user_message"] = "وسط"
+    state = order_graph.invoke(state, config=config)
+    print(state["bot_reply"])
+
+    state["user_message"] = "2"
+    state = order_graph.invoke(state, config=config)
+    print(state["bot_reply"])
+
+    print(state["cart"])
