@@ -4,7 +4,6 @@ from groq import Groq
 
 from app.database import SessionLocal
 from app.models import Category, MenuItem, ItemPrice
-from sqlalchemy import or_
 
 load_dotenv()
 
@@ -53,32 +52,38 @@ def ask_juice_bar_ai(user_message: str):
     menu_context = build_menu_context()
 
     system_prompt = f"""
-You are a friendly WhatsApp assistant for Ramadan Juice in Lebanon.
+        You are the official WhatsApp assistant for Ramadan Juice in Lebanon.
 
-Language rules:
-- If the customer writes Arabic, reply in clear Lebanese/Modern Arabic.
-- IMPORTANT: If an item is not explicitly present in MENU, do not mention it.
-- If you are unsure, say: "لا أجد هذا الصنف في القائمة الحالية."
-- If the customer writes English, reply in English.
-- Keep the answer short and natural.
+        Your job:
+        - Help customers understand the menu.
+        - Recommend items from the menu.
+        - Answer simple questions about available items.
+        - Encourage customers to send ORDER or طلب when they want to place an order.
 
-Recommendation rules:
--If the customer mentions a fruit, ingredient, flavor, or craving, recommend matching menu items.
-- Recommend at most 2 or 3 items.
-- Do not list everything.
-- Mention prices only if the customer asks for prices.
-- Use only the menu below.
-- Never invent items.
-- If the customer wants to order, tell them to send ORDER or طلب.
+        Language rules:
+        - Reply in the same language as the customer.
+        - If the customer writes English, reply in English.
+        - If the customer writes Arabic, reply in clear simple Arabic suitable for Lebanese customers.
+        - Do not use Egyptian or Gulf dialect.
+        - Keep replies short and friendly.
 
-Style:
-- Sound like a polite restaurant employee.
-- Use simple friendly language.
-- Avoid long explanations.
+        Strict menu rules:
+        - Use ONLY the items listed in MENU.
+        - Never invent item names, prices, sizes, or ingredients.
+        - If the requested item is not in MENU, say:
+        "لا أجد هذا الصنف في القائمة الحالية."
+        - Mention prices only if the customer asks about prices.
+        - Recommend at most 2 items.
 
-MENU:
-{menu_context}
-"""
+        Style:
+        - Friendly WhatsApp style.
+        - Use light emojis.
+        - Avoid long paragraphs.
+        - Do not list the full menu unless the customer explicitly asks for the full menu.
+
+        MENU:
+        {menu_context}
+        """
 
     response = client.chat.completions.create(
         model="llama-3.1-8b-instant",
@@ -86,7 +91,7 @@ MENU:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message}
         ],
-        temperature=0.6
+        temperature=0.2
     )
 
     return response.choices[0].message.content

@@ -219,3 +219,24 @@ def get_order_state(phone_number: str):
     graph_state = order_graph.get_state(config)
 
     return graph_state.values
+
+def reset_order_state(phone_number: str):
+    config = {
+        "configurable": {
+            "thread_id": phone_number
+        }
+    }
+
+    order_graph.update_state(
+        config,
+        {
+            "phone_number": phone_number,
+            "user_message": "",
+            "current_step": "",
+            "current_item": None,
+            "current_size": None,
+            "current_quantity": None,
+            "cart": [],
+            "bot_reply": ""
+        }
+    )

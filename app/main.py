@@ -1,12 +1,12 @@
-from urllib import response
-
 from fastapi import FastAPI, Form
 from fastapi.responses import Response
 from twilio.twiml.messaging_response import MessagingResponse
 from app.database import SessionLocal, engine
-from app.models import Base, Category, MenuItem, ItemPrice, Customer, Order, OrderItem
-from app.services.groq_service import ask_juice_bar_ai
-from app.graph.order_graph import process_order_message, get_order_state
+from app.models import Base, Category, MenuItem, Customer, Order, OrderItem
+from app.services.ai_assistant_service import get_ai_reply
+from app.graph.order_graph import process_order_message, get_order_state, reset_order_state
+from app.services.intent_service import classify_intent
+from app.services.menu_service import (build_menu_text, build_category_text, build_item_text)
 
 app = FastAPI()
 Base.metadata.create_all(bind=engine)
@@ -65,6 +65,7 @@ async def whatsapp_webhook(
 
     if normalized_message in ["cancel", "إلغاء"]:
         active_order_threads.discard(From)
+        reset_order_state(From)
 
         response.message(
             "Order cancelled ❌\n\n"
@@ -196,6 +197,7 @@ async def whatsapp_webhook(
             db.commit()
 
             active_order_threads.discard(From)
+            reset_order_state(From)
 
             response.message(
                 f"Order confirmed ✅\n\n"
@@ -214,171 +216,11 @@ async def whatsapp_webhook(
             content=str(response),
             media_type="application/xml"
         )
-
- 
-        conversation = active_conversations[From]
-
-        if conversation["state"] == "choosing_item":
-            db = SessionLocal()
-            try:
-                item = (
-                    db.query(MenuItem)
-                    .filter(
-                        (MenuItem.name_ar == user_message) |
-                        (MenuItem.name_en.ilike(user_message))
-                    )
-                    .first()
-                )
-
-                if not item:
-                    response.message(
-                        "Item not found. Please send a valid item name.\n"
-                        "لم يتم العثور على الصنف. أرسل اسم صنف صحيح."
-                    )
-                else:
-                    prices = (
-                        db.query(ItemPrice)
-                        .filter(ItemPrice.item_id == item.id)
-                        .all()
-                    )
-
-                    conversation["current_item"] = item.id
-                    conversation["state"] = "choosing_size"
-
-                    size_text = f"You selected: {item.name_ar} - {item.name_en}\n\n"
-                    size_text += "Available sizes / الأحجام المتوفرة:\n"
-
-                    for number, price in enumerate(prices, start=1):
-                        size_text += (
-                            f"{number}. {price.size_ar} / {price.size_en} "
-                            f"- {price.price_lbp:,} LBP\n"
-                        )
-
-                    size_text += "\nSend the size name.\nأرسل اسم الحجم."
-
-                    response.message(size_text)
-
-            finally:
-                db.close()
-
-            return Response(content=str(response), media_type="application/xml")
     
-        elif conversation["state"] == "choosing_size":
-           db = SessionLocal()
-           try:
-                prices = (
-                    db.query(ItemPrice)
-                    .filter(
-                        ItemPrice.item_id == conversation["current_item"]
-                    )
-                    .all()
-                )
-
-                selected_price = None
-
-                for price in prices:
-                    if (
-                        user_message == price.size_ar
-                        or user_message.lower() == price.size_en.lower()
-                    ):
-                        selected_price = price
-                        break
-
-                if not selected_price:
-                    response.message(
-                        "Invalid size.\n"
-                        "Please send one of the available sizes.\n\n"
-                        "حجم غير صحيح.\n"
-                        "أرسل أحد الأحجام المتوفرة."
-                    )
-                else:
-                    conversation["selected_price_id"] = selected_price.id
-                    conversation["state"] = "choosing_quantity"
-
-                    response.message(
-                        f"You selected: {selected_price.size_ar}\n\n"
-                        f"How many would you like?\n"
-                        f"كم الكمية المطلوبة؟"
-                    )
-
-           finally:
-                db.close()
-
-           return Response(content=str(response),media_type="application/xml")
-        
-        elif conversation["state"] == "choosing_quantity":
-            if not user_message.isdigit() or int(user_message) <= 0:
-                response.message(
-                    "Invalid quantity.\n"
-                    "Please send a positive number.\n\n"
-                    "كمية غير صحيحة.\n"
-                    "أرسل رقمًا موجبًا."
-                )
-            else:
-                quantity = int(user_message)
-
-                db = SessionLocal()
-                try:
-                    price = (
-                        db.query(ItemPrice)
-                        .filter(ItemPrice.id == conversation["selected_price_id"])
-                        .first()
-                    )
-
-                    item = (
-                        db.query(MenuItem)
-                        .filter(MenuItem.id == conversation["current_item"])
-                        .first()
-                    )
-
-                    conversation["cart"].append({
-                        "item_id": item.id,
-                        "item_name_ar": item.name_ar,
-                        "item_name_en": item.name_en,
-                        "size_ar": price.size_ar,
-                        "size_en": price.size_en,
-                        "quantity": quantity,
-                        "unit_price": price.price_lbp,
-                        "subtotal": quantity * price.price_lbp
-                    })
-
-                    conversation["current_item"] = None
-                    conversation["selected_price_id"] = None
-                    conversation["state"] = "choosing_item"
-
-                    response.message(
-                        f"Added to cart ✅\n\n"
-                        f"{quantity} × {item.name_ar} ({price.size_ar})\n"
-                        f"Subtotal: {quantity * price.price_lbp:,} LBP\n\n"
-                        f"Send another item name to add more.\n"
-                        f"Or send CART to view your cart.\n"
-                        f"Or send CONFIRM to place the order.\n\n"
-                        f"تمت الإضافة إلى السلة ✅\n\n"
-                        f"{quantity} × {item.name_ar} ({price.size_ar})\n"
-                        f"المجموع: {quantity * price.price_lbp:,} ل.ل\n\n"
-                        f"أرسل اسم صنف آخر للإضافة.\n"
-                        f"أو أرسل CART لعرض السلة.\n"
-                        f"أو أرسل CONFIRM لتأكيد الطلب."
-                    )
-
-                finally:
-                    db.close()
-
-            return Response(content=str(response), media_type="application/xml")
-        
     elif normalized_message in ["menu", "مينو", "المنيو", "القائمة"]:
         db = SessionLocal()
         try:
-            menu_text = "Ramadan Juice Menu 🧃\n\n"
-
-            categories = db.query(Category).all()
-
-            for number, category in enumerate(categories, start=1):
-                menu_text += f"{number}. {category.name_ar} - {category.name_en}\n"
-
-            menu_text += "\nSend a category name to view items.\nأرسل اسم القسم لعرض الأصناف."
-
-            response.message(menu_text)
+            response.message(build_menu_text(db))
         finally:
             db.close()
 
@@ -402,73 +244,67 @@ async def whatsapp_webhook(
         response.message(result["bot_reply"])
 
     else:
-        db = SessionLocal()
-        try:
-            category = (
-                db.query(Category)
-                .filter(
-                    (Category.name_ar == user_message) |
-                    (Category.name_en.ilike(user_message))
-                )
-                .first()
+        intent = classify_intent(user_message)
+
+        if intent == "greeting":
+            response.message(
+                "👋 Hello! Welcome to Ramadan Juice.\n\n"
+                "I can help you browse the menu, recommend drinks, or place an order.\n"
+                "Send MENU to browse or ORDER to start ordering."
             )
 
-            if category:
-                items = (
-                    db.query(MenuItem)
-                    .filter(MenuItem.category_id == category.id)
-                    .all()
-                )
+        elif intent == "menu":
+            db = SessionLocal()
+            try:
+                response.message(build_menu_text(db))
+            finally:
+                db.close()
 
-                items_text = f"{category.name_en} 🧃 - {category.name_ar}\n\n"
+        elif intent == "order":
+            active_order_threads.add(From)
+            result = process_order_message(From, user_message)
+            response.message(result["bot_reply"])
 
-                for number, item in enumerate(items, start=1):
-                    items_text += f"{number}. {item.name_ar} - {item.name_en}\n"
+        elif intent == "recommendation":
+            response.message(get_ai_reply(user_message))
 
-                items_text += "\nSend an item name to view details.\nأرسل اسم الصنف لعرض التفاصيل."
-
-                response.message(items_text)
-
-            else:
-                item = (
-                    db.query(MenuItem)
+        else:
+            db = SessionLocal()
+            try:
+                category = (
+                    db.query(Category)
                     .filter(
-                        (MenuItem.name_ar == user_message) |
-                        (MenuItem.name_en.ilike(user_message))
+                        (Category.name_ar == user_message) |
+                        (Category.name_en.ilike(user_message))
                     )
                     .first()
                 )
 
-                if item:
-                    prices = (
-                        db.query(ItemPrice)
-                        .filter(ItemPrice.item_id == item.id)
-                        .all()
-                    )
-
-                    item_text = f"{item.name_ar} - {item.name_en}\n\n"
-
-                    if item.description_ar:
-                        item_text += f"{item.description_ar}\n\n"
-
-                    item_text += "Prices / الأسعار:\n"
-
-                    for price in prices:
-                        item_text += (
-                            f"- {price.size_ar} / {price.size_en}: "
-                            f"{price.price_lbp:,} LBP\n"
-                        )
-
-                    response.message(item_text)
+                if category:
+                    response.message(build_category_text(db, category))
 
                 else:
-                    try:
-                        ai_reply = ask_juice_bar_ai(user_message)
-                        response.message(ai_reply)
-                    except Exception:
-                        response.message("Welcome to Ramadan Juice! Send MENU to see our juices.")
+                    item = (
+                        db.query(MenuItem)
+                        .filter(
+                            (MenuItem.name_ar == user_message) |
+                            (MenuItem.name_en.ilike(user_message))
+                        )
+                        .first()
+                    )
 
-        finally:
-            db.close()
+                    if item:
+                        response.message(build_item_text(db, item))
+
+                    else:
+                        try:
+                            response.message(get_ai_reply(user_message))
+                        except Exception:
+                            response.message(
+                                "Welcome to Ramadan Juice! Send MENU to see our juices."
+                            )
+
+            finally:
+                db.close()
 
     return Response(content=str(response), media_type="application/xml")
