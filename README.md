@@ -8,6 +8,13 @@ The assistant allows customers to browse the menu, place orders through WhatsApp
 
 ---
 
+## 🌐 Demo
+
+The application is deployed on Render and integrated with Twilio WhatsApp Sandbox.
+
+Due to API usage costs and sandbox restrictions, the live endpoint is not publicly exposed.
+Screenshots demonstrating the workflow will be provided below.
+
 ## ✨ Features
 
 ### 👤 Customer Features
@@ -42,7 +49,9 @@ The assistant allows customers to browse the menu, place orders through WhatsApp
 
 * 🧠 LangGraph
 * 🤖 Groq API
-* 🔄 OpenAI-ready architecture
+* ✨ OpenAI GPT-4o Mini Support
+* 🧩 AI Intent Classification
+* 🌍 Multilingual Support (English, Arabic, Arabizi)
 
 ### Messaging
 
@@ -55,8 +64,9 @@ The assistant allows customers to browse the menu, place orders through WhatsApp
 
 ### Deployment
 
-* ☁️ Render
-* 🌐 ngrok
+* ☁️ Render Web Service
+* 🐘 Render PostgreSQL
+* 🌐 ngrok (Local Development)
 
 ---
 
@@ -66,10 +76,16 @@ The assistant allows customers to browse the menu, place orders through WhatsApp
 app/
 │
 ├── graph/
-│   └── order_graph.py
+│   ├── order_graph.py
+│   └── chat_router_graph.py
 │
 ├── services/
-│   └── groq_service.py
+│   ├── ai_assistant_service.py
+│   ├── groq_service.py
+│   ├── openai_service.py
+│   ├── intent_service.py
+│   ├── menu_service.py
+│   └── search_service.py
 │
 ├── database.py
 ├── main.py
@@ -93,13 +109,13 @@ WhatsApp User
       ▼
    LangGraph
       │
- ┌────┴────┐
- ▼         ▼
-AI      Database
-(Groq)  (PostgreSQL)
-      │
-      ▼
- Order Saved
+ ┌────┴──────────────┐
+ ▼                   ▼
+AI               Database
+(Groq/Openai)  (PostgreSQL)
+              │
+              ▼
+           Whatsapp Reply
 ```
 
 ---
@@ -233,12 +249,14 @@ Bot: Order confirmed ✅
 
 ## 🔮 Future Improvements
 
-* 🤖 Migrate AI service from Groq to OpenAI for improved multilingual responses
+* 🎤 Voice-to-Text using Whisper/OpenAI
+* 🔊 Voice-to-Voice WhatsApp Assistant
+* 📈 Analytics Dashboard
 * 🐘 PostgreSQL-backed LangGraph Memory
 * 📊 Admin Dashboard
 * 🚚 Order Status Tracking
 * 🧾 Menu Management Interface
-* 📱 WhatsApp Business API Integration
+* 📱 Official WhatsApp Business Number Integration
 
 ---
 
