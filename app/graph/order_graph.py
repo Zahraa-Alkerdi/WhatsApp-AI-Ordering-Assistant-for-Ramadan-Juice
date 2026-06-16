@@ -51,59 +51,90 @@ def choose_item_node(state: OrderState):
 
     try:
         order_info = extract_order_info(state["user_message"])
+        extracted_items = order_info.get("items", [])
 
-        item_query = order_info.get("item_name") or state["user_message"]
-        extracted_size = order_info.get("size")
-        extracted_quantity = order_info.get("quantity")
-        extracted_notes = order_info.get("notes")
+        if not extracted_items:
+            extracted_items = [{
+                "item_name": state["user_message"],
+                "size": None,
+                "quantity": 1,
+                "notes": None
+            }]
 
-        matches = find_matching_items(db, item_query)
+        added_items_text = []
 
-        if len(matches) == 0:
-            state["bot_reply"] = (
-                "Item not found.\n"
-                "Please send a valid item name."
-            )
-            state["current_step"] = "choosing_item"
-            return state
+        for extracted in extracted_items:
+            item_query = extracted.get("item_name") or state["user_message"]
+            extracted_size = extracted.get("size")
+            extracted_quantity = extracted.get("quantity") or 1
+            extracted_notes = extracted.get("notes")
 
-        if len(matches) > 1:
-            reply = "I found multiple items:\n\n"
+            matches = find_matching_items(db, item_query)
+            exact_match = None
 
-            for item in matches[:5]:
-                reply += f"• {item.name_ar}\n"
+            for match in matches:
+                if (
+                    match.name_ar == item_query
+                    or match.name_en.lower() == item_query.lower()
+                ):
+                    exact_match = match
+                    break
 
-            reply += "\nPlease send the exact item name."
+            if exact_match:
+                matches = [exact_match]
 
-            state["bot_reply"] = reply
-            state["current_step"] = "choosing_item"
-            return state
+            if len(matches) == 0:
+                state["bot_reply"] = (
+                    f"Item not found: {item_query}\n"
+                    "Please send a valid item name."
+                )
+                state["current_step"] = "choosing_item"
+                return state
 
-        item = matches[0]
+            if len(matches) > 1:
+                reply = f"I found multiple matches for {item_query}:\n\n"
 
-        state["current_item"] = item.id
-        state["current_notes"] = extracted_notes
+                for item in matches[:5]:
+                    reply += f"• {item.name_ar}\n"
 
-        if extracted_size:
+                reply += "\nPlease send the exact item name."
+
+                state["bot_reply"] = reply
+                state["current_step"] = "choosing_item"
+                return state
+
+            item = matches[0]
+
+            state["current_item"] = item.id
+            state["current_notes"] = extracted_notes
+            state["current_quantity"] = int(extracted_quantity)
+
+            if not extracted_size:
+                state["current_step"] = "choosing_size"
+                state["bot_reply"] = (
+                    f"You selected {item.name_ar}. "
+                    "What size would you like?"
+                )
+                return state
+
             state["current_size"] = extracted_size
 
-            if extracted_quantity:
-                state["current_quantity"] = int(extracted_quantity)
-                return add_to_cart_node(state)
+            result_state = add_to_cart_node(state)
 
-            state["current_step"] = "choosing_quantity"
-            state["bot_reply"] = (
-                f"You selected {item.name_ar} ({extracted_size}). "
-                "How many would you like?"
+            if "Added to cart" not in result_state["bot_reply"]:
+                return result_state
+
+            added_items_text.append(
+                f"✅ {extracted_quantity} × {item.name_ar}"
             )
-            return state
 
-        state["current_step"] = "choosing_size"
         state["bot_reply"] = (
-            f"You selected {item.name_ar}. "
-            "What size would you like?"
+            "Added to cart ✅\n\n"
+            + "\n".join(added_items_text)
+            + "\n\nSend CART to review your order or CONFIRM to place it."
         )
 
+        state["current_step"] = "choosing_item"
         return state
 
     finally:
@@ -249,7 +280,7 @@ def process_order_message(phone_number: str, user_message: str):
         input_state = {
             "phone_number": phone_number,
             "user_message": user_message,
-            "current_step": "",
+            "current_step": "choosing_item",
             "current_item": None,
             "current_size": None,
             "current_quantity": None,
@@ -288,7 +319,7 @@ def reset_order_state(phone_number: str):
         {
             "phone_number": phone_number,
             "user_message": "",
-            "current_step": "",
+            "current_step": "choosing_item",
             "current_item": None,
             "current_size": None,
             "current_quantity": None,

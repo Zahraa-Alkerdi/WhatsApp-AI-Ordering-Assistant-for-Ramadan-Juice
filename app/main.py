@@ -229,12 +229,10 @@ async def whatsapp_webhook(
     elif normalized_message in ["order", "طلب"]:
         active_order_threads.add(From)
 
-        result = process_order_message(
-            From,
-            user_message
+        response.message(
+            "What would you like to order?\n"
+            "شو بتحب تطلب؟"
         )
-
-        response.message(result["bot_reply"])
 
     elif From in active_order_threads:
 
@@ -255,7 +253,7 @@ async def whatsapp_webhook(
             response.message(get_ai_reply(user_message))
             
 
-        elif intent == "order":
+        elif intent in ["order", "order_request"]:
             active_order_threads.add(From)
             result = process_order_message(From, user_message)
             response.message(result["bot_reply"])
@@ -299,7 +297,7 @@ async def whatsapp_webhook(
                             response.message(get_ai_reply(user_message))
                         except Exception:
                             response.message(
-                                "Welcome to Ramadan Juice! Send MENU to see our juices."
+                                "Welcome to Ramadan Juice! You can view the menu across this link: https://menu.omegasoftware.ca/ramadanjuicetarikmatar ."
                             )
 
             finally:

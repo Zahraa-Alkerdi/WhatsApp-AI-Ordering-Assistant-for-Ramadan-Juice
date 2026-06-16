@@ -4,39 +4,87 @@ from app.services.openai_service import client
 
 def extract_order_info(user_message: str):
     prompt = f"""
-Extract order information from this restaurant WhatsApp message.
+Extract restaurant order information from this WhatsApp message.
 
 Return ONLY valid JSON.
 
-Fields:
-- item_name: string or null
-- size: string or null
-- quantity: integer or null
-- notes: string or null
+Format:
+{{
+  "items": [
+    {{
+      "item_name": "string or null",
+      "size": "string or null",
+      "quantity": 1,
+      "notes": "string or null"
+    }}
+  ]
+}}
 
 Rules:
-- Extract only what the customer clearly mentioned.
+- Extract all ordered items, not only one.
+- If the customer mentions two or more items, return all of them in the items list.
 - If quantity is missing, use 1.
-- Notes include customizations like no ashta, extra pistachio, less sugar.
-- Do not invent item names.
+- Notes include customizations like no ashta, extra pistachio, no cashew, less sugar.
+- If a note applies to a specific item, put it only on that item.
+- Do not invent items, sizes, or notes.
 
 Examples:
 
 Message: "بدي أفوكا وسط بلا قشطة"
 Output:
-{{"item_name":"أفوكا","size":"وسط","quantity":1,"notes":"بلا قشطة"}}
+{{
+  "items": [
+    {{
+      "item_name": "أفوكا",
+      "size": "وسط",
+      "quantity": 1,
+      "notes": "بلا قشطة"
+    }}
+  ]
+}}
 
-Message: "I want 2 large avocado without ashta"
+Message: "بدي وحدة كريب نيوتيلا وكباية افوكادو مع قشطة بلا كاجو"
 Output:
-{{"item_name":"avocado","size":"large","quantity":2,"notes":"without ashta"}}
+{{
+  "items": [
+    {{
+      "item_name": "كريب نيوتيلا",
+      "size": null,
+      "quantity": 1,
+      "notes": null
+    }},
+    {{
+      "item_name": "افوكادو",
+      "size": "كباية",
+      "quantity": 1,
+      "notes": "مع قشطة بلا كاجو"
+    }}
+  ]
+}}
 
-Message: "حليب وموز كبير"
+Message: "I want 2 large avocado without ashta and one Nutella crepe"
 Output:
-{{"item_name":"حليب وموز","size":"كبير","quantity":1,"notes":null}}
+{{
+  "items": [
+    {{
+      "item_name": "avocado",
+      "size": "large",
+      "quantity": 2,
+      "notes": "without ashta"
+    }},
+    {{
+      "item_name": "Nutella crepe",
+      "size": null,
+      "quantity": 1,
+      "notes": null
+    }}
+  ]
+}}
 
-Message:
+Customer message:
 "{user_message}"
 """
+
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
