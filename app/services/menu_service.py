@@ -1,25 +1,6 @@
-from app.models import Category
 from app.models import MenuItem
 from app.models import ItemPrice
-
-def build_menu_text(db):
-        menu_text = "🍹 Ramadan Juice Menu 🍹\n\n"
-
-        categories = db.query(Category).all()
-
-        for number, category in enumerate(categories, start=1):
-            menu_text += (
-                f"{number}. "
-                f"{category.name_ar} - "
-                f"{category.name_en}\n"
-            )
-
-        menu_text += (
-            "\nSend a category name to view items.\n"
-            "أرسل اسم القسم لعرض الأصناف."
-        )
-
-        return menu_text
+    
 
 def build_category_text(db, category):
     items = (

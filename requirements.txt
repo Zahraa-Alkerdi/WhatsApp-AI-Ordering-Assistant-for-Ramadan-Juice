@@ -5,8 +5,8 @@ twilio
 python-dotenv
 sqlalchemy
 openai
-groq
 langgraph
 langchain
 langgraph-checkpoint
 psycopg2-binary
+alembic

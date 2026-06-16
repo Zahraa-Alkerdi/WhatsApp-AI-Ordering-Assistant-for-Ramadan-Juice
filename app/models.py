@@ -77,7 +77,7 @@ class OrderItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
     menu_item_id = Column(Integer, ForeignKey("menu_items.id"), nullable=False)
-
+    notes = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     size_ar = Column(String, nullable=False)
     size_en = Column(String, nullable=True)

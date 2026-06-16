@@ -2,7 +2,7 @@
 
 ## 📌 Overview
 
-A WhatsApp-based AI ordering assistant built with FastAPI, Twilio, LangGraph, SQLAlchemy, and Groq/OpenAI-compatible LLMs.
+A WhatsApp-based AI ordering assistant built with FastAPI, Twilio, LangGraph, SQLAlchemy, and OpenAI-compatible LLMs.
 
 The assistant allows customers to browse the menu, place orders through WhatsApp, manage their cart, and confirm orders. Confirmed orders are stored in a database and can be viewed through API endpoints.
 
@@ -19,11 +19,12 @@ Screenshots demonstrating the workflow will be provided below.
 
 ### 👤 Customer Features
 
-* 📋 Browse menu categories
+* 📋 Access the full menu through the menu link
 * 🍹 View menu items and prices
 * 🤖 AI-powered menu recommendations
 * 🛒 Create orders through WhatsApp
 * ➕ Add multiple items to cart
+* 📝 Add order notes and customizations
 * 📦 View cart contents
 * ✅ Confirm orders
 * ❌ Cancel orders
@@ -48,7 +49,6 @@ Screenshots demonstrating the workflow will be provided below.
 ### AI & Agent Framework
 
 * 🧠 LangGraph
-* 🤖 Groq API
 * ✨ OpenAI GPT-4o Mini Support
 * 🧩 AI Intent Classification
 * 🌍 Multilingual Support (English, Arabic, Arabizi)
@@ -81,7 +81,7 @@ app/
 │
 ├── services/
 │   ├── ai_assistant_service.py
-│   ├── groq_service.py
+│   ├── order_extraction_service.py
 │   ├── openai_service.py
 │   ├── intent_service.py
 │   ├── menu_service.py
@@ -101,21 +101,21 @@ app/
 WhatsApp User
       │
       ▼
-   Twilio
+Twilio WhatsApp
       │
       ▼
- FastAPI Webhook
+FastAPI Webhook
       │
       ▼
-   LangGraph
+LangGraph Order Flow
       │
  ┌────┴──────────────┐
  ▼                   ▼
-AI               Database
-(Groq/Openai)  (PostgreSQL)
-              │
-              ▼
-           Whatsapp Reply
+OpenAI GPT-4o Mini   PostgreSQL
+AI Assistant         Database
+      │                   │
+      └───────▼───────────┘
+        WhatsApp Reply
 ```
 
 ---
@@ -165,12 +165,6 @@ GET /orders
 
 The project expects menu/category/prices data files inside the data/ directory.
 
-For privacy reasons, the actual business data is not included in this repository.
-
-A sample file (categories.example.json) is provided to demonstrate the expected structure.
-
-You may create your own .json files based on the example data.
-
 ---
 
 ## ⚙️ Installation
@@ -197,11 +191,16 @@ pip install -r requirements.txt
 ### 🔐 Configure Environment Variables
 
 ```env
-GROQ_API_KEY=your_key
-TWILIO_ACCOUNT_SID=your_sid
-TWILIO_AUTH_TOKEN=your_token
-DATABASE_URL=sqlite:///./ramadan_juice.db
+OPENAI_API_KEY=your_key
+DATABASE_URL=external_Database_URL
+TWILIO_ACCOUNT_SID=your_twilio_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+
 ```
+**Note:**
+- For local development, you may use SQLite or the Render External Database URL.
+- In Render Web Services, use the Render Internal Database URL.
+- Use the Render External Database URL when connecting from your laptop or running Alembic migrations locally.
 
 ### 🌱 Seed Database
 

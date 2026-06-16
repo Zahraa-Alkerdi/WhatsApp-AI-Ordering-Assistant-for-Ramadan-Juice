@@ -1,9 +1,10 @@
-from typing import TypedDict,List, Optional
+from typing import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
 from app.database import SessionLocal
 from app.models import MenuItem, ItemPrice
 from app.services.search_service import find_matching_items
+from app.services.order_extraction_service import extract_order_info
 
 memory = InMemorySaver()
 
@@ -15,6 +16,7 @@ class OrderState(TypedDict):
     current_item: str | None
     current_size: str | None
     current_quantity: int | None
+    current_notes: str | None
     cart: list
 
 def router_node(state: OrderState):
@@ -40,6 +42,7 @@ def route_by_step(state: OrderState):
 
 def start_order_node(state: OrderState):
     state["bot_reply"] = "What would you like to order?"
+    state["current_notes"] = None
     state["current_step"] = "choosing_item"
     return state
 
@@ -47,22 +50,24 @@ def choose_item_node(state: OrderState):
     db = SessionLocal()
 
     try:
-        matches = find_matching_items(
-            db,
-            state["user_message"]
-        )
+        order_info = extract_order_info(state["user_message"])
+
+        item_query = order_info.get("item_name") or state["user_message"]
+        extracted_size = order_info.get("size")
+        extracted_quantity = order_info.get("quantity")
+        extracted_notes = order_info.get("notes")
+
+        matches = find_matching_items(db, item_query)
 
         if len(matches) == 0:
             state["bot_reply"] = (
                 "Item not found.\n"
                 "Please send a valid item name."
             )
-
             state["current_step"] = "choosing_item"
-
             return state
 
-        elif len(matches) > 1:
+        if len(matches) > 1:
             reply = "I found multiple items:\n\n"
 
             for item in matches[:5]:
@@ -72,14 +77,28 @@ def choose_item_node(state: OrderState):
 
             state["bot_reply"] = reply
             state["current_step"] = "choosing_item"
-
             return state
 
         item = matches[0]
 
         state["current_item"] = item.id
-        state["current_step"] = "choosing_size"
+        state["current_notes"] = extracted_notes
 
+        if extracted_size:
+            state["current_size"] = extracted_size
+
+            if extracted_quantity:
+                state["current_quantity"] = int(extracted_quantity)
+                return add_to_cart_node(state)
+
+            state["current_step"] = "choosing_quantity"
+            state["bot_reply"] = (
+                f"You selected {item.name_ar} ({extracted_size}). "
+                "How many would you like?"
+            )
+            return state
+
+        state["current_step"] = "choosing_size"
         state["bot_reply"] = (
             f"You selected {item.name_ar}. "
             "What size would you like?"
@@ -157,7 +176,8 @@ def add_to_cart_node(state: OrderState):
             "size_en": price.size_en,
             "quantity": quantity,
             "unit_price": price.price_lbp,
-            "subtotal": subtotal
+            "subtotal": subtotal,
+            "notes": state.get("current_notes")
         })
 
         state["bot_reply"] = (
@@ -170,6 +190,7 @@ def add_to_cart_node(state: OrderState):
         state["current_item"] = None
         state["current_size"] = None
         state["current_quantity"] = None
+        state["current_notes"] = None
         state["current_step"] = "choosing_item"
 
         return state
@@ -232,6 +253,7 @@ def process_order_message(phone_number: str, user_message: str):
             "current_item": None,
             "current_size": None,
             "current_quantity": None,
+            "current_notes": None,
             "cart": [],
             "bot_reply": ""
         }
@@ -270,6 +292,7 @@ def reset_order_state(phone_number: str):
             "current_item": None,
             "current_size": None,
             "current_quantity": None,
+            "current_notes": None,
             "cart": [],
             "bot_reply": ""
         }

@@ -6,7 +6,7 @@ from app.models import Base, Category, MenuItem, Customer, Order, OrderItem
 from app.services.ai_assistant_service import get_ai_reply
 from app.graph.order_graph import process_order_message, get_order_state, reset_order_state
 from app.services.intent_service import classify_intent
-from app.services.menu_service import (build_menu_text, build_category_text, build_item_text)
+from app.services.menu_service import ( build_category_text, build_item_text)
 
 app = FastAPI()
 Base.metadata.create_all(bind=engine)
@@ -34,7 +34,8 @@ def get_orders():
                     "size": item.size_ar,
                     "quantity": item.quantity,
                     "unit_price": item.unit_price,
-                    "subtotal": item.subtotal
+                    "subtotal": item.subtotal,
+                    "notes": item.notes
                 })
 
             result.append({
@@ -105,8 +106,12 @@ async def whatsapp_webhook(
                 f"{number}. {item['quantity']} × "
                 f"{item['item_name_ar']} "
                 f"({item['size_ar']})\n"
-                f"   {item['subtotal']:,} LBP\n\n"
             )
+
+            if item.get("notes"):
+                cart_text += f"   Notes: {item['notes']}\n"
+
+            cart_text += f"   {item['subtotal']:,} LBP\n\n"
 
         cart_text += (
             f"------------------\n"
@@ -189,7 +194,8 @@ async def whatsapp_webhook(
                     size_ar=item["size_ar"],
                     size_en=item["size_en"],
                     unit_price=item["unit_price"],
-                    subtotal=item["subtotal"]
+                    subtotal=item["subtotal"],
+                    notes=item.get("notes")
                 )
 
                 db.add(order_item)
@@ -218,11 +224,7 @@ async def whatsapp_webhook(
         )
     
     elif normalized_message in ["menu", "مينو", "المنيو", "القائمة"]:
-        db = SessionLocal()
-        try:
-            response.message(build_menu_text(db))
-        finally:
-            db.close()
+        response.message(get_ai_reply("The customer asked for the menu. Send the menu link in a friendly way."))
 
     elif normalized_message in ["order", "طلب"]:
         active_order_threads.add(From)
@@ -250,11 +252,8 @@ async def whatsapp_webhook(
             response.message(get_ai_reply(user_message))
 
         elif intent == "menu_request":
-            db = SessionLocal()
-            try:
-                response.message(build_menu_text(db))
-            finally:
-                db.close()
+            response.message(get_ai_reply(user_message))
+            
 
         elif intent == "order":
             active_order_threads.add(From)

@@ -1,5 +1,5 @@
 import json
-from app.services.groq_service import client
+from app.services.openai_service import client
 
 
 def classify_intent(user_message: str) -> str:
@@ -55,7 +55,7 @@ Return JSON only:
 """
 
     response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model="gpt-4o-mini",
         messages=[
             {"role": "user", "content": prompt}
         ],
