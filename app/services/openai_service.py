@@ -54,6 +54,7 @@ MENU:
             {"role": "user", "content": user_message},
         ],
         temperature=0.2,
+        max_tokens = 150
     )
 
     return response.choices[0].message.content
