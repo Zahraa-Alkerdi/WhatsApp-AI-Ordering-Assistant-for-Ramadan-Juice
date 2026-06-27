@@ -71,8 +71,9 @@ async def whatsapp_webhook(
         reset_order_state(From)
 
         response.message(
-            "Order cancelled ❌\n\n"
             "تم إلغاء الطلب ❌"
+            if detected_lang == "ar"
+            else "Order cancelled ❌"
         )
 
         return Response(
@@ -101,29 +102,44 @@ async def whatsapp_webhook(
 
         total = sum(item["subtotal"] for item in cart)
 
-        cart_text = "🛒 Your Cart\n\n"
+        if detected_lang == "ar":
+            cart_text = "🛒 فاتورتك\n\n"
 
-        for number, item in enumerate(cart, start=1):
+            for number, item in enumerate(cart, start=1):
+                cart_text += (
+                    f"{number}. {item['quantity']} × "
+                    f"{item['item_name_ar']} "
+                    f"({item['size_ar']})\n"
+                )
+                if item.get("notes"):
+                    cart_text += f"   ملاحظات: {item['notes']}\n"
+                cart_text += f"   {item['subtotal']:,} ل.ل\n\n"
+
             cart_text += (
-                f"{number}. {item['quantity']} × "
-                f"{item['item_name_ar']} "
-                f"({item['size_ar']})\n"
+                f"------------------\n"
+                f"المجموع: {total:,} ل.ل\n\n"
+                f"أرسل CONFIRM لتأكيد الطلب.\n"
+                f"أرسل CANCEL لإلغاء الطلب."
             )
+        else:
+            cart_text = "🛒 Your Cart\n\n"
 
-            if item.get("notes"):
-                cart_text += f"   Notes: {item['notes']}\n"
+            for number, item in enumerate(cart, start=1):
+                cart_text += (
+                    f"{number}. {item['quantity']} × "
+                    f"{item['item_name_ar']} "
+                    f"({item['size_ar']})\n"
+                )
+                if item.get("notes"):
+                    cart_text += f"   Notes: {item['notes']}\n"
+                cart_text += f"   {item['subtotal']:,} LBP\n\n"
 
-            cart_text += f"   {item['subtotal']:,} LBP\n\n"
-
-        cart_text += (
-            f"------------------\n"
-            f"Total: {total:,} LBP\n\n"
-            f"Send CONFIRM to place the order.\n"
-            f"Send CANCEL to cancel the order.\n\n"
-            f"المجموع: {total:,} ل.ل\n"
-            f"أرسل CONFIRM لتأكيد الطلب.\n"
-            f"أرسل CANCEL لإلغاء الطلب."
-        )
+            cart_text += (
+                f"------------------\n"
+                f"Total: {total:,} LBP\n\n"
+                f"Send CONFIRM to place the order.\n"
+                f"Send CANCEL to cancel the order."
+            )
 
         response.message(cart_text)
 
@@ -147,8 +163,9 @@ async def whatsapp_webhook(
 
         if not cart:
             response.message(
-                "Your cart is empty.\n"
-                "الفاتورة فارغة."
+                "الفاتورة فارغة." 
+                if detected_lang == "ar" 
+                else "Your cart is empty."
             )
             return Response(
                 content=str(response),
@@ -208,13 +225,16 @@ async def whatsapp_webhook(
             reset_order_state(From)
 
             response.message(
+                f"تم تأكيد الطلب ✅\n\n"
+                f"رقم الطلب: #{order.id}\n"
+                f"المجموع: {total_price:,} ل.ل\n\n"
+                f"شكراً لطلبك! 😊"
+                if detected_lang == "ar"
+                else
                 f"Order confirmed ✅\n\n"
                 f"Order Number: #{order.id}\n"
                 f"Total: {total_price:,} LBP\n\n"
-                f"Thank you for your order!\n\n"
-                f"تم تأكيد الطلب ✅\n"
-                f"رقم الطلب: #{order.id}\n"
-                f"المجموع: {total_price:,} ل.ل"
+                f"Thank you for your order! 😊"
             )
 
         finally:
