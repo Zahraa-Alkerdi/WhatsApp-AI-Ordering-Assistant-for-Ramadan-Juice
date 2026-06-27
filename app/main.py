@@ -7,6 +7,7 @@ from app.services.ai_assistant_service import get_ai_reply
 from app.graph.order_graph import process_order_message, get_order_state, reset_order_state
 from app.services.intent_service import classify_intent
 from app.services.menu_service import ( build_category_text, build_item_text)
+from app.services.language_service import detect_language
 
 app = FastAPI()
 Base.metadata.create_all(bind=engine)
@@ -61,6 +62,7 @@ async def whatsapp_webhook(
 
     user_message = Body.strip()
     normalized_message = user_message.lower()
+    detected_lang = detect_language(user_message)
 
     response = MessagingResponse()
 
@@ -230,15 +232,17 @@ async def whatsapp_webhook(
         active_order_threads.add(From)
 
         response.message(
-            "What would you like to order?\n"
-            "شو بتحب تطلب؟"
+            "شو بتحب تطلب؟ 😊"
+            if detected_lang == "ar"
+            else "What would you like to order? 😊"
         )
 
     elif From in active_order_threads:
 
         result = process_order_message(
             From,
-            user_message
+            user_message,
+            detected_lang
         )
 
         response.message(result["bot_reply"])
@@ -255,7 +259,7 @@ async def whatsapp_webhook(
 
         elif intent in ["order", "order_request"]:
             active_order_threads.add(From)
-            result = process_order_message(From, user_message)
+            result = process_order_message(From, user_message, detected_lang)
             response.message(result["bot_reply"])
 
         elif intent == "recommendation":

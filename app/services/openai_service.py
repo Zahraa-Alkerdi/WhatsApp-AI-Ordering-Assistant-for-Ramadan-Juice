@@ -4,7 +4,14 @@ from openai import OpenAI
 
 load_dotenv()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+api_key = os.getenv("OPENAI_API_KEY")
+
+client = OpenAI(api_key=api_key,
+    timeout=30.0,
+    max_retries=2
+)
+
 
 
 def ask_juice_bar_openai(user_message: str):

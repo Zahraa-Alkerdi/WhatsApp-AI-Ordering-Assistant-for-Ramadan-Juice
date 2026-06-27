@@ -3,6 +3,9 @@ from app.services.openai_service import ask_juice_bar_openai
 
 
 def get_ai_reply(user_message: str):
+    if os.getenv("AI_ENABLED", "true") == "false":
+        return "🤖 AI disabled in test mode. Send MENU or ORDER."
+    
     provider = os.getenv("AI_PROVIDER")
 
     try:

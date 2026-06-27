@@ -1,8 +1,21 @@
 import json
 from app.services.openai_service import client
+import os
 
 
 def extract_order_info(user_message: str):
+    if os.getenv("AI_ENABLED", "true") == "false":
+        return {
+            "items": [
+                {
+                    "item_name": user_message,
+                    "size": None,
+                    "quantity": 1,
+                    "notes": None
+                }
+            ]
+        }
+     
     prompt = f"""
 Extract restaurant order information from this WhatsApp message.
 
@@ -98,9 +111,4 @@ Customer message:
     try:
         return json.loads(response.choices[0].message.content)
     except Exception:
-        return {
-            "item_name": None,
-            "size": None,
-            "quantity": None,
-            "notes": None
-        }
+      return {"items": []}

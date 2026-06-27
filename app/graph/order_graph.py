@@ -18,9 +18,12 @@ class OrderState(TypedDict):
     current_quantity: int | None
     current_notes: str | None
     cart: list
+    language: str
+
 
 def router_node(state: OrderState):
     return state
+
 
 def route_by_step(state: OrderState):
     step = state["current_step"]
@@ -36,18 +39,26 @@ def route_by_step(state: OrderState):
 
     if step == "choosing_quantity":
         return "choose_quantity"
-    
+
     return "start_order"
 
 
 def start_order_node(state: OrderState):
-    state["bot_reply"] = "What would you like to order?"
+    lang = state.get("language", "en")
+
+    state["bot_reply"] = (
+        "شو بتحب تطلب؟ 😊"
+        if lang == "ar"
+        else "What would you like to order? 😊"
+    )
     state["current_notes"] = None
     state["current_step"] = "choosing_item"
     return state
 
+
 def choose_item_node(state: OrderState):
     db = SessionLocal()
+    lang = state.get("language", "en")
 
     try:
         order_info = extract_order_info(state["user_message"])
@@ -85,6 +96,10 @@ def choose_item_node(state: OrderState):
 
             if len(matches) == 0:
                 state["bot_reply"] = (
+                    f"غير موجود {item_query}\n"
+                    "أرسل اسم صنف صحيح."
+                    if lang == "ar"
+                    else
                     f"Item not found: {item_query}\n"
                     "Please send a valid item name."
                 )
@@ -92,12 +107,16 @@ def choose_item_node(state: OrderState):
                 return state
 
             if len(matches) > 1:
-                reply = f"I found multiple matches for {item_query}:\n\n"
-
-                for item in matches[:5]:
-                    reply += f"• {item.name_ar}\n"
-
-                reply += "\nPlease send the exact item name."
+                if lang == "ar":
+                    reply = f"في أكثر من نتيجة لـ {item_query}:\n\n"
+                    for item in matches[:5]:
+                        reply += f"• {item.name_ar}\n"
+                    reply += "\nأرسل الاسم الدقيق."
+                else:
+                    reply = f"I found multiple matches for {item_query}:\n\n"
+                    for item in matches[:5]:
+                        reply += f"• {item.name_ar}\n"
+                    reply += "\nPlease send the exact item name."
 
                 state["bot_reply"] = reply
                 state["current_step"] = "choosing_item"
@@ -112,8 +131,10 @@ def choose_item_node(state: OrderState):
             if not extracted_size:
                 state["current_step"] = "choosing_size"
                 state["bot_reply"] = (
-                    f"You selected {item.name_ar}. "
-                    "What size would you like?"
+                    f"اخترت {item.name_ar}. أي حجم بدك؟"
+                    if lang == "ar"
+                    else
+                    f"You selected {item.name_ar}. What size would you like?"
                 )
                 return state
 
@@ -121,7 +142,12 @@ def choose_item_node(state: OrderState):
 
             result_state = add_to_cart_node(state)
 
-            if "Added to cart" not in result_state["bot_reply"]:
+            if lang == "ar":
+                check_phrase = "اضيف للفاتورة"
+            else:
+                check_phrase = "Added to cart"
+
+            if check_phrase not in result_state["bot_reply"]:
                 return result_state
 
             added_items_text.append(
@@ -129,6 +155,11 @@ def choose_item_node(state: OrderState):
             )
 
         state["bot_reply"] = (
+            "اضيف للفاتورة ✅\n\n"
+            + "\n".join(added_items_text)
+            + "\n\nأرسل CART لتراجع طلبك أو CONFIRM لتأكيده."
+            if lang == "ar"
+            else
             "Added to cart ✅\n\n"
             + "\n".join(added_items_text)
             + "\n\nSend CART to review your order or CONFIRM to place it."
@@ -140,24 +171,34 @@ def choose_item_node(state: OrderState):
     finally:
         db.close()
 
+
 def choose_size_node(state: OrderState):
+    lang = state.get("language", "en")
     size = state["user_message"]
 
     state["current_size"] = size
     state["current_step"] = "choosing_quantity"
 
-    state["bot_reply"] =(
-        f"Size {size} selected. "
-        "How many would you like?"
+    state["bot_reply"] = (
+        f"تمام، {size}. كم العدد؟"
+        if lang == "ar"
+        else
+        f"Size {size} selected. How many would you like?"
     )
 
     return state
 
+
 def choose_quantity_node(state: OrderState):
+    lang = state.get("language", "en")
     user_message = state["user_message"]
 
     if not user_message.isdigit() or int(user_message) <= 0:
-        state["bot_reply"] = "Invalid quantity. Please send a positive number."
+        state["bot_reply"] = (
+            "أرسل رقم صحيح من فضلك."
+            if lang == "ar"
+            else "Invalid quantity. Please send a positive number."
+        )
         return state
 
     state["current_quantity"] = int(user_message)
@@ -166,6 +207,7 @@ def choose_quantity_node(state: OrderState):
 
 def add_to_cart_node(state: OrderState):
     db = SessionLocal()
+    lang = state.get("language", "en")
 
     try:
         item = (
@@ -175,7 +217,11 @@ def add_to_cart_node(state: OrderState):
         )
 
         if not item:
-            state["bot_reply"] = "Item not found. Please send a valid item name."
+            state["bot_reply"] = (
+                " الصنف غير موجود. أرسل اسم صحيح."
+                if lang == "ar"
+                else "Item not found. Please send a valid item name."
+            )
             state["current_step"] = "choosing_item"
             return state
 
@@ -192,7 +238,11 @@ def add_to_cart_node(state: OrderState):
         )
 
         if not price:
-            state["bot_reply"] = "Invalid size. Please send a valid size."
+            state["bot_reply"] = (
+                "الحجم غير صحيح. أرسل حجم صحيح."
+                if lang == "ar"
+                else "Invalid size. Please send a valid size."
+            )
             state["current_step"] = "choosing_size"
             return state
 
@@ -212,6 +262,12 @@ def add_to_cart_node(state: OrderState):
         })
 
         state["bot_reply"] = (
+            f"انضاف للسلة ✅\n\n"
+            f"{quantity} × {item.name_ar} ({price.size_ar})\n"
+            f"المجموع الجزئي: {subtotal:,} ل.ل\n\n"
+            f"أرسل صنف ثاني، CART، أو CONFIRM."
+            if lang == "ar"
+            else
             f"Added to cart ✅\n\n"
             f"{quantity} × {item.name_ar} ({price.size_ar})\n"
             f"Subtotal: {subtotal:,} LBP\n\n"
@@ -228,6 +284,7 @@ def add_to_cart_node(state: OrderState):
 
     finally:
         db.close()
+
 
 graph_builder = StateGraph(OrderState)
 
@@ -263,7 +320,7 @@ order_graph = graph_builder.compile(
 )
 
 
-def process_order_message(phone_number: str, user_message: str):
+def process_order_message(phone_number: str, user_message: str, language: str = "en"):
     config = {
         "configurable": {
             "thread_id": phone_number
@@ -274,7 +331,8 @@ def process_order_message(phone_number: str, user_message: str):
 
     if current_state.values:
         input_state = {
-            "user_message": user_message
+            "user_message": user_message,
+            "language": language
         }
     else:
         input_state = {
@@ -286,7 +344,8 @@ def process_order_message(phone_number: str, user_message: str):
             "current_quantity": None,
             "current_notes": None,
             "cart": [],
-            "bot_reply": ""
+            "bot_reply": "",
+            "language": language
         }
 
     result = order_graph.invoke(
@@ -295,6 +354,7 @@ def process_order_message(phone_number: str, user_message: str):
     )
 
     return result
+
 
 def get_order_state(phone_number: str):
     config = {
@@ -306,6 +366,7 @@ def get_order_state(phone_number: str):
     graph_state = order_graph.get_state(config)
 
     return graph_state.values
+
 
 def reset_order_state(phone_number: str):
     config = {
@@ -325,7 +386,7 @@ def reset_order_state(phone_number: str):
             "current_quantity": None,
             "current_notes": None,
             "cart": [],
-            "bot_reply": ""
+            "bot_reply": "",
+            "language": "en"
         }
     )
-
